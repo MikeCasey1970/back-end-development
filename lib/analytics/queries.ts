@@ -27,7 +27,7 @@ export async function getFollowerGrowth(
   let query = supabase
     .schema('social')
     .from('candidate_follower_metrics')
-    .select('inserted_at, candidate_name, total_followers')
+    .select('inserted_at, candidate_name, total_followers, platform')
     .order('inserted_at', { ascending: true })
 
   if (startDate) query = query.gte('inserted_at', startDate)
@@ -54,14 +54,14 @@ export async function getWeeklyEngagement(
   const supabase  = await createClient()
   const clientId  = await getClientId()
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
-    .schema('social')
-    .rpc('get_weekly_engagement', {
+  const { data, error } = await supabase.rpc(
+    'get_weekly_engagement' as never,
+    {
       p_client_id:  clientId,
       p_start_date: startDate ?? null,
       p_end_date:   endDate   ?? null,
-    })
+    }
+  )
 
   if (error) throw new Error(`weekly-engagement query failed: ${error.message}`)
 
@@ -83,15 +83,12 @@ export async function getCumulativeEngagement(
 ): Promise<CumulativeEngagementRow[]> {
   const supabase = await createClient()
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
-    .schema('social')
-    .rpc('get_cumulative_engagement', {
-      p_client_id:  clientId,
-      p_candidate:  candidate  ?? null,
-      p_start_date: startDate  ?? null,
-      p_end_date:   endDate    ?? null,
-    })
+  const { data, error } = await supabase.rpc('get_cumulative_engagement', {
+    p_client_id:  clientId,
+    p_candidate:  candidate  ?? null,
+    p_start_date: startDate  ?? null,
+    p_end_date:   endDate    ?? null,
+  })
 
   if (error) throw new Error(`cumulative-engagement query failed: ${error.message}`)
 
@@ -200,6 +197,7 @@ export async function getContentTable(
 const FOLLOWER_SORTABLE_COLUMNS = new Set<string>([
   'inserted_at',
   'candidate_name',
+  'platform',
   'total_followers',
 ])
 
@@ -222,13 +220,14 @@ export async function getFollowerMetricsTable(
   let query = supabase
     .schema('social')
     .from('candidate_follower_metrics')
-    .select('id, candidate_name, inserted_at, total_followers', { count: 'exact' })
+    .select('id, candidate_name, platform, inserted_at, total_followers', { count: 'exact' })
     .order(sortColumn, { ascending })
     .range(from, to)
 
   if (params.search_query) {
     query = query.ilike('candidate_name', `%${params.search_query}%`)
   }
+  if (params.platform)   query = query.eq('platform', params.platform)
   if (params.start_date) query = query.gte('inserted_at', params.start_date)
   if (params.end_date)   query = query.lte('inserted_at', params.end_date)
 
